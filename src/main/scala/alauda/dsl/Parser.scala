@@ -1,4 +1,4 @@
-package autosubst.dsl
+package alauda.dsl
 
 import scala.util.parsing.combinator.*
 

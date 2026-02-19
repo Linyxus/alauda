@@ -1,6 +1,6 @@
-package autosubst.gen
+package alauda.gen
 
-import autosubst.dsl.*
+import alauda.dsl.*
 import java.nio.file.{Files, Path, Paths}
 
 object CodeGen:

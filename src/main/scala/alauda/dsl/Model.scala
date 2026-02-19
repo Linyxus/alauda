@@ -1,4 +1,4 @@
-package autosubst.dsl
+package alauda.dsl
 
 /** Substitution image: what a BVar of this kind gets substituted to. */
 case class SubstImage(sortName: String, index: Option[String] = None)

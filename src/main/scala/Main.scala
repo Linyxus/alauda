@@ -1,5 +1,5 @@
-import autosubst.dsl.Parser
-import autosubst.gen.CodeGen
+import alauda.dsl.Parser
+import alauda.gen.CodeGen
 import java.nio.file.{Files, Paths}
 
 @main def main(inputFile: String, outputDir: String): Unit =
