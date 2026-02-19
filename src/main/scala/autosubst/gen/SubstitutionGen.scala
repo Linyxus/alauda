@@ -97,6 +97,9 @@ object SubstitutionGen:
   // ===== Helpers =====
 
   private def hasSubst(spec: LangSpec, sort: SortDef): Boolean =
+    // Kind-indexed sorts only get .subst if they are a substImage
+    if sort.index.contains("Kind") then
+      return substSpecialization(spec, sort).isDefined
     sort.constructors.exists(c =>
       c.fields.exists(f => f.fieldType match
         case FieldType.BVarRef(kind) => spec.kinds.exists(k => k.name == kind && k.substImage.isDefined)
@@ -105,6 +108,12 @@ object SubstitutionGen:
         case FieldType.Plain(_) => false
       )
     )
+
+  /** For a Kind-indexed sort that is a substImage, return the kind it's specialized for. */
+  private def substSpecialization(spec: LangSpec, sort: SortDef): Option[VarKind] =
+    if sort.index.contains("Kind") then
+      spec.kinds.find(k => k.substImage.exists(_.sortName == sort.name))
+    else None
 
   /** Find the constructor in the image sort that is the "variable constructor" for this kind. */
   private def findVarCtor(spec: LangSpec, kind: VarKind): (String, String) =
@@ -116,21 +125,31 @@ object SubstitutionGen:
       c.fields.length == 1 &&
       c.fields.head.binders.isEmpty &&
       (c.fields.head.fieldType match
-        case FieldType.BVarRef(k) => k == kind.name
+        case FieldType.BVarRef(k) =>
+          k == kind.name ||
+          // For Kind-indexed sorts, BVarRef("_index") matches any specific kind
+          (k == "_index" && sort.index.contains("Kind"))
         case _ => false
       ) &&
-      c.resultIndex == img.index
+      // Result index matches, or for Kind-indexed sorts with generic result (None), any index matches
+      (c.resultIndex == img.index ||
+       (c.resultIndex.isEmpty && sort.index.contains("Kind")))
     }.getOrElse(
       throw new RuntimeException(s"No variable constructor found for kind ${kind.name} in sort ${img.sortName}")
     )
     (img.sortName, ctor.name)
 
-  /** Whether this constructor is a "variable constructor" (single BVarRef of a kind with substImage). */
-  private def isVarCtor(spec: LangSpec, ctor: Constructor): Option[VarKind] =
+  /** Whether this constructor is a "variable constructor" (single BVarRef of a kind with substImage).
+    * For Kind-indexed sorts, pass the sort to detect BVarRef("_index") as a generic var ctor. */
+  private def isVarCtor(spec: LangSpec, ctor: Constructor, sort: SortDef = null): Option[VarKind] =
     if ctor.fields.length == 1 && ctor.fields.head.binders.isEmpty then
       ctor.fields.head.fieldType match
         case FieldType.BVarRef(kindName) =>
-          spec.kinds.find(k => k.name == kindName && k.substImage.isDefined)
+          if kindName == "_index" && sort != null && sort.index.contains("Kind") then
+            // Generic var ctor in Kind-indexed sort — find which kind this sort is a substImage for
+            substSpecialization(spec, sort)
+          else
+            spec.kinds.find(k => k.name == kindName && k.substImage.isDefined)
         case _ => None
     else None
 
@@ -142,6 +161,15 @@ object SubstitutionGen:
   /** Capitalize kind name: "var" -> "Var", "tvar" -> "TVar" */
   private def capitalizeKind(kind: VarKind): String =
     kind.name.take(1).toUpperCase + kind.name.drop(1)
+
+  /** Get (sortParam, indexVar) for theorem signatures, handling Kind-indexed specialization. */
+  private def substSortParamAndIndex(spec: LangSpec, sort: SortDef): (String, String) =
+    substSpecialization(spec, sort) match
+      case Some(kind) =>
+        val idx = kind.substImage.get.index.get
+        ("", s" .$idx")
+      case None =>
+        (sortParamStr(sort), indexVarStr(sort))
 
   private def sortParamStr(sort: SortDef): String =
     sort.index match
@@ -226,13 +254,19 @@ object SubstitutionGen:
 
   private def genSortSubst(spec: LangSpec, sort: SortDef, kindsWithSubst: List[VarKind]): String =
     val sb = new StringBuilder
-    val sp = sortParamStr(sort)
-    val iv = indexVarStr(sort)
+    // For Kind-indexed sorts, specialize to the substImage index
+    val specKind = substSpecialization(spec, sort)
+    val (sp, iv) = specKind match
+      case Some(kind) =>
+        val idx = kind.substImage.get.index.get
+        ("", s" .$idx")
+      case None =>
+        (sortParamStr(sort), indexVarStr(sort))
 
     sb ++= s"def ${sort.name}.subst$sp : ${sort.name}$iv s1 -> Subst s1 s2 -> ${sort.name}$iv s2\n"
 
     for ctor <- sort.constructors do
-      isVarCtor(spec, ctor) match
+      isVarCtor(spec, ctor, sort) match
         case Some(kind) =>
           // Variable constructor: return substitution directly
           sb ++= s"| .${ctor.name} x0, σ => σ.${kind.name} x0\n"
@@ -324,8 +358,7 @@ object SubstitutionGen:
   // ===== 10. Sort.weaken_rename_comm =====
 
   private def genWeakenRenameComm(spec: LangSpec, sort: SortDef): String =
-    val sp = sortParamStr(sort)
-    val iv = indexVarStr(sort)
+    val (sp, iv) = substSortParamAndIndex(spec, sort)
     s"theorem ${sort.name}.weaken_rename_comm$sp {t : ${sort.name}$iv s1} {f : Rename s1 s2} :\n" +
     s"  (t.rename Rename.succ).rename (f.lift (k:=k0)) = (t.rename f).rename (Rename.succ) := by\n" +
     s"  simp [${sort.name}.rename_comp, Rename.succ_lift_comm]\n"
@@ -360,8 +393,7 @@ object SubstitutionGen:
 
   private def genSortWeakenSubstComm(spec: LangSpec, sort: SortDef, kindsWithSubst: List[VarKind]): String =
     val sb = new StringBuilder
-    val sp = sortParamStr(sort)
-    val iv = indexVarStr(sort)
+    val (sp, iv) = substSortParamAndIndex(spec, sort)
 
     sb ++= s"theorem ${sort.name}.weaken_subst_comm$sp {t : ${sort.name}$iv (s1 ++ K)} {σ : Subst s1 s2} :\n"
     sb ++= s"  (t.subst (σ.liftMany K)).rename ((Rename.succ (k:=k0)).liftMany K) =\n"
@@ -377,7 +409,7 @@ object SubstitutionGen:
     val sb = new StringBuilder
 
     // Check if this is a variable constructor
-    isVarCtor(spec, ctor) match
+    isVarCtor(spec, ctor, sort) match
       case Some(kind) =>
         val cap = capitalizeKind(kind)
         sb ++= s"  | .${ctor.name} x =>\n"
@@ -440,8 +472,7 @@ object SubstitutionGen:
   // ===== 13. Sort.weaken_subst_comm_base =====
 
   private def genSortWeakenSubstCommBase(spec: LangSpec, sort: SortDef): String =
-    val sp = sortParamStr(sort)
-    val iv = indexVarStr(sort)
+    val (sp, iv) = substSortParamAndIndex(spec, sort)
     s"theorem ${sort.name}.weaken_subst_comm_base$sp {t : ${sort.name}$iv s1} {σ : Subst s1 s2} :\n" +
     s"  (t.subst σ).rename (Rename.succ (k:=k0)) = (t.rename Rename.succ).subst (σ.lift (k:=k0)) :=\n" +
     s"  ${sort.name}.weaken_subst_comm (K:=[])\n"
@@ -480,8 +511,7 @@ object SubstitutionGen:
 
   private def genSortSubstComp(spec: LangSpec, sort: SortDef, kindsWithSubst: List[VarKind]): String =
     val sb = new StringBuilder
-    val sp = sortParamStr(sort)
-    val iv = indexVarStr(sort)
+    val (sp, iv) = substSortParamAndIndex(spec, sort)
 
     sb ++= s"theorem ${sort.name}.subst_comp$sp {t : ${sort.name}$iv s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :\n"
     sb ++= s"  (t.subst σ1).subst σ2 = t.subst (σ1.comp σ2) := by\n"
@@ -497,7 +527,7 @@ object SubstitutionGen:
       return s"  | ${ctor.name} => rfl\n"
 
     // Variable constructor
-    isVarCtor(spec, ctor) match
+    isVarCtor(spec, ctor, sort) match
       case Some(kind) =>
         return s"  | ${ctor.name} => simp [${sort.name}.subst, Subst.comp]\n"
       case None => ()
@@ -556,8 +586,7 @@ object SubstitutionGen:
 
   private def genSortSubstId(spec: LangSpec, sort: SortDef, kindsWithSubst: List[VarKind]): String =
     val sb = new StringBuilder
-    val sp = sortParamStr(sort)
-    val iv = indexVarStr(sort)
+    val (sp, iv) = substSortParamAndIndex(spec, sort)
 
     sb ++= s"theorem ${sort.name}.subst_id$sp {t : ${sort.name}$iv s} :\n"
     sb ++= s"  t.subst Subst.id = t := by\n"
@@ -572,7 +601,7 @@ object SubstitutionGen:
     if ctor.fields.isEmpty || ctor.fields.forall(_.fieldType.isInstanceOf[FieldType.Plain]) then
       return s"  | ${ctor.name} => rfl\n"
 
-    isVarCtor(spec, ctor) match
+    isVarCtor(spec, ctor, sort) match
       case Some(kind) =>
         return s"  | ${ctor.name} => simp [${sort.name}.subst, Subst.id]\n"
       case None => ()
