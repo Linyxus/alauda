@@ -1,0 +1,28 @@
+namespace RegionCalc
+
+kinds:
+  var "x"
+  tvar "X"
+  rvar "r"
+
+inductive Ty : Sig -> Type
+| tvar : BVar s .tvar -> Ty s
+| arrow : Ty s -> Ty s -> Ty s
+| ref : BVar s .rvar -> Ty s -> Ty s
+| forallTy : Ty (s,X) -> Ty s
+| forallRgn : Ty (s,r) -> Ty s
+| unit : Ty s
+
+inductive Exp : Sig -> Type
+| var : BVar s .var -> Exp s
+| abs : Ty s -> Exp (s,x) -> Exp s
+| app : Exp s -> Exp s -> Exp s
+| tabs : Exp (s,X) -> Exp s
+| tapp : Exp s -> Ty s -> Exp s
+| rabs : Exp (s,r) -> Exp s
+| rapp : Exp s -> BVar s .rvar -> Exp s
+| new : BVar s .rvar -> Exp s -> Exp s
+| deref : Exp s -> Exp s
+| assign : Exp s -> Exp s -> Exp s
+| letrgn : Exp (s,r) -> Exp s
+| unit : Exp s

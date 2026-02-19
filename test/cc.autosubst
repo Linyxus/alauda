@@ -1,0 +1,54 @@
+namespace CC
+
+kinds:
+  var "x"
+  tvar "X"
+  cvar "C"
+
+enum TySort := capt | shape | exi
+
+inductive Var : Kind -> Sig -> Type
+| bound : BVar s k -> Var k s
+| free : Nat -> Var k s
+
+inductive CaptureSet : Sig -> Type
+| empty : CaptureSet s
+| union : CaptureSet s -> CaptureSet s -> CaptureSet s
+| var : Var .var s -> CaptureSet s
+| cvar : BVar s .cvar -> CaptureSet s
+
+inductive CaptureBound : Sig -> Type
+| unbound : CaptureBound s
+| bound : CaptureSet s -> CaptureBound s
+
+inductive Ty : TySort -> Sig -> Type
+| top : Ty .shape s
+| tvar : BVar s .tvar -> Ty .shape s
+| arrow : Ty .capt s -> Ty .exi (s,x) -> Ty .shape s
+| poly : Ty .shape s -> Ty .exi (s,X) -> Ty .shape s
+| cpoly : CaptureBound s -> Ty .exi (s,C) -> Ty .shape s
+| unit : Ty .shape s
+| cap : Ty .shape s
+| bool : Ty .shape s
+| cell : Ty .shape s
+| capt : CaptureSet s -> Ty .shape s -> Ty .capt s
+| exi : Ty .capt (s,C) -> Ty .exi s
+| typ : Ty .capt s -> Ty .exi s
+
+inductive Exp : Sig -> Type
+| var : Var .var s -> Exp s
+| abs : CaptureSet s -> Ty .capt s -> Exp (s,x) -> Exp s
+| tabs : CaptureSet s -> Ty .shape s -> Exp (s,X) -> Exp s
+| cabs : CaptureSet s -> CaptureBound s -> Exp (s,C) -> Exp s
+| pack : CaptureSet s -> Var .var s -> Exp s
+| app : Var .var s -> Var .var s -> Exp s
+| tapp : Var .var s -> Ty .shape s -> Exp s
+| capp : Var .var s -> CaptureSet s -> Exp s
+| letin : Exp s -> Exp (s,x) -> Exp s
+| unpack : Exp s -> Exp ((s,C),x) -> Exp s
+| unit : Exp s
+| btrue : Exp s
+| bfalse : Exp s
+| read : Var .var s -> Exp s
+| write : Var .var s -> Var .var s -> Exp s
+| cond : Var .var s -> Exp s -> Exp s -> Exp s

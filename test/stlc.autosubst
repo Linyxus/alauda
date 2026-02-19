@@ -1,0 +1,13 @@
+namespace STLC
+
+kinds:
+  var "x"
+
+inductive Ty : Sig -> Type
+| base : Ty s
+| arrow : Ty s -> Ty s -> Ty s
+
+inductive Exp : Sig -> Type
+| var : BVar s .var -> Exp s
+| abs : Ty s -> Exp (s,x) -> Exp s
+| app : Exp s -> Exp s -> Exp s

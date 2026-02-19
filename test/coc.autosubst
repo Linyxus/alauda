@@ -1,0 +1,11 @@
+namespace CoC
+
+kinds:
+  var "x"
+
+inductive Expr : Sig -> Type
+| var : BVar s .var -> Expr s
+| sort : Nat -> Expr s
+| pi : Expr s -> Expr (s,x) -> Expr s
+| lam : Expr s -> Expr (s,x) -> Expr s
+| app : Expr s -> Expr s -> Expr s

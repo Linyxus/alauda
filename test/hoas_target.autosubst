@@ -1,0 +1,37 @@
+namespace RefCalc
+
+kinds:
+  var "x"
+  lvar "l"
+
+enum TySort := val | comp
+
+inductive VTy : Sig -> Type
+| unit : VTy s
+| arrow : VTy s -> CTy s -> VTy s
+| prod : VTy s -> VTy s -> VTy s
+| ref : BVar s .lvar -> VTy s -> VTy s
+| forallL : VTy (s,l) -> VTy s
+
+inductive CTy : Sig -> Type
+| ret : VTy s -> CTy s
+| bind : CTy s -> CTy (s,x) -> CTy s
+
+inductive Val : Sig -> Type
+| var : BVar s .var -> Val s
+| unit : Val s
+| pair : Val s -> Val s -> Val s
+| abs : VTy s -> Comp (s,x) -> Val s
+| labs : Comp (s,l) -> Val s
+
+inductive Comp : Sig -> Type
+| ret : Val s -> Comp s
+| bind : Comp s -> Comp (s,x) -> Comp s
+| app : Val s -> Val s -> Comp s
+| lapp : Val s -> BVar s .lvar -> Comp s
+| fst : Val s -> Comp s
+| snd : Val s -> Comp s
+| newrgn : Comp (s,l) -> Comp s
+| read : BVar s .lvar -> Val s -> Comp s
+| write : BVar s .lvar -> Val s -> Val s -> Comp s
+| alloc : BVar s .lvar -> Val s -> Comp s

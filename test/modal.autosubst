@@ -1,0 +1,22 @@
+namespace Modal
+
+kinds:
+  var "x"
+  mvar "m"
+
+inductive Ty : Sig -> Type
+| base : Ty s
+| arrow : Ty s -> Ty s -> Ty s
+| box : Ty s -> Ty s
+| prod : Ty s -> Ty s -> Ty s
+
+inductive Exp : Sig -> Type
+| var : BVar s .var -> Exp s
+| mvar : BVar s .mvar -> Exp s
+| abs : Ty s -> Exp (s,x) -> Exp s
+| app : Exp s -> Exp s -> Exp s
+| boxi : Exp (s,m) -> Exp s
+| letbox : Exp s -> Exp (s,m) -> Exp s
+| pair : Exp s -> Exp s -> Exp s
+| fst : Exp s -> Exp s
+| snd : Exp s -> Exp s
