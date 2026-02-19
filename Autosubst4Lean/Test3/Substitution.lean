@@ -119,12 +119,12 @@ theorem Expr.subst_comp {t : Expr s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :
   induction t generalizing s2 s3 with
   | var => simp [Expr.subst, Subst.comp]
   | sort => rfl
-  | pi ih0 ih1 =>
-    simp [Expr.subst, Subst.comp_lift]
-  | lam ih0 ih1 =>
-    simp [Expr.subst, Subst.comp_lift]
-  | app ih0 ih1 =>
-    simp [Expr.subst]
+  | pi _ _ ih0 ih1 =>
+    simp_all [Expr.subst, Subst.comp_lift]
+  | lam _ _ ih0 ih1 =>
+    simp_all [Expr.subst, Subst.comp_lift]
+  | app _ _ ih0 ih1 =>
+    simp_all [Expr.subst]
 
 theorem Subst.lift_id :
   (Subst.id (s:=s)).lift (k:=k) = Subst.id := by
@@ -137,11 +137,11 @@ theorem Expr.subst_id {t : Expr s} :
   induction t with
   | var => simp [Expr.subst, Subst.id]
   | sort => rfl
-  | pi ih0 ih1 =>
-    simp [Expr.subst, Subst.lift_id]
-  | lam ih0 ih1 =>
-    simp [Expr.subst, Subst.lift_id]
-  | app ih0 ih1 =>
-    simp [Expr.subst]
+  | pi _ _ ih0 ih1 =>
+    simp_all [Expr.subst, Subst.lift_id]
+  | lam _ _ ih0 ih1 =>
+    simp_all [Expr.subst, Subst.lift_id]
+  | app _ _ ih0 ih1 =>
+    simp_all [Expr.subst]
 
 end CoC

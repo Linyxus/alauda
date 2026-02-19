@@ -1,8 +1,8 @@
 namespace Modal
 
 kinds:
-  var "x"
-  mvar "m"
+  var "x" => Exp
+  mvar "m" => Exp
 
 inductive Ty : Sig -> Type
 | base : Ty s

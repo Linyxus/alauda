@@ -1,8 +1,8 @@
 namespace RegionCalc
 
 kinds:
-  var "x"
-  tvar "X"
+  var "x" => Exp
+  tvar "X" => Ty
   rvar "r"
 
 inductive Ty : Sig -> Type

@@ -386,7 +386,7 @@ theorem Subst.comp_liftMany {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} {K : Sig} :
 
 theorem Var.subst_comp {t : Var .var s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :
   (t.subst σ1).subst σ2 = t.subst (σ1.comp σ2) := by
-  induction t generalizing s2 s3 with
+  cases t with
   | bound => simp [Var.subst, Subst.comp]
   | free => rfl
 
@@ -394,9 +394,9 @@ theorem CaptureSet.subst_comp {t : CaptureSet s1} {σ1 : Subst s1 s2} {σ2 : Sub
   (t.subst σ1).subst σ2 = t.subst (σ1.comp σ2) := by
   induction t generalizing s2 s3 with
   | empty => rfl
-  | union ih0 ih1 =>
-    simp [CaptureSet.subst]
-  | var =>
+  | union _ _ ih0 ih1 =>
+    simp_all [CaptureSet.subst]
+  | var _ =>
     simp [CaptureSet.subst, Var.subst_comp]
   | cvar => simp [CaptureSet.subst, Subst.comp]
 
@@ -404,7 +404,7 @@ theorem CaptureBound.subst_comp {t : CaptureBound s1} {σ1 : Subst s1 s2} {σ2 :
   (t.subst σ1).subst σ2 = t.subst (σ1.comp σ2) := by
   induction t generalizing s2 s3 with
   | unbound => rfl
-  | bound =>
+  | bound _ =>
     simp [CaptureBound.subst, CaptureSet.subst_comp]
 
 theorem Ty.subst_comp {tySort : TySort} {t : Ty tySort s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :
@@ -412,55 +412,55 @@ theorem Ty.subst_comp {tySort : TySort} {t : Ty tySort s1} {σ1 : Subst s1 s2} {
   induction t generalizing s2 s3 with
   | top => rfl
   | tvar => simp [Ty.subst, Subst.comp]
-  | arrow ih0 ih1 =>
-    simp [Ty.subst, Subst.comp_lift]
-  | poly ih0 ih1 =>
-    simp [Ty.subst, Subst.comp_lift]
-  | cpoly ih0 =>
-    simp [Ty.subst, CaptureBound.subst_comp, Subst.comp_lift]
+  | arrow _ _ ih0 ih1 =>
+    simp_all [Ty.subst, Subst.comp_lift]
+  | poly _ _ ih0 ih1 =>
+    simp_all [Ty.subst, Subst.comp_lift]
+  | cpoly _ _ ih0 =>
+    simp_all [Ty.subst, CaptureBound.subst_comp, Subst.comp_lift]
   | unit => rfl
   | cap => rfl
   | bool => rfl
   | cell => rfl
-  | capt ih0 =>
-    simp [Ty.subst, CaptureSet.subst_comp]
-  | exi ih0 =>
-    simp [Ty.subst, Subst.comp_lift]
-  | typ ih0 =>
-    simp [Ty.subst]
+  | capt _ _ ih0 =>
+    simp_all [Ty.subst, CaptureSet.subst_comp]
+  | exi _ ih0 =>
+    simp_all [Ty.subst, Subst.comp_lift]
+  | typ _ ih0 =>
+    simp_all [Ty.subst]
 
 theorem Exp.subst_comp {t : Exp s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :
   (t.subst σ1).subst σ2 = t.subst (σ1.comp σ2) := by
   induction t generalizing s2 s3 with
-  | var =>
+  | var _ =>
     simp [Exp.subst, Var.subst_comp]
-  | abs ih0 =>
-    simp [Exp.subst, CaptureSet.subst_comp, Ty.subst_comp, Subst.comp_lift]
-  | tabs ih0 =>
-    simp [Exp.subst, CaptureSet.subst_comp, Ty.subst_comp, Subst.comp_lift]
-  | cabs ih0 =>
-    simp [Exp.subst, CaptureSet.subst_comp, CaptureBound.subst_comp, Subst.comp_lift]
-  | pack =>
+  | abs _ _ _ ih0 =>
+    simp_all [Exp.subst, CaptureSet.subst_comp, Ty.subst_comp, Subst.comp_lift]
+  | tabs _ _ _ ih0 =>
+    simp_all [Exp.subst, CaptureSet.subst_comp, Ty.subst_comp, Subst.comp_lift]
+  | cabs _ _ _ ih0 =>
+    simp_all [Exp.subst, CaptureSet.subst_comp, CaptureBound.subst_comp, Subst.comp_lift]
+  | pack _ _ =>
     simp [Exp.subst, CaptureSet.subst_comp, Var.subst_comp]
-  | app =>
+  | app _ _ =>
     simp [Exp.subst, Var.subst_comp]
-  | tapp =>
+  | tapp _ _ =>
     simp [Exp.subst, Var.subst_comp, Ty.subst_comp]
-  | capp =>
+  | capp _ _ =>
     simp [Exp.subst, Var.subst_comp, CaptureSet.subst_comp]
-  | letin ih0 ih1 =>
-    simp [Exp.subst, Subst.comp_lift]
-  | unpack ih0 ih1 =>
-    simp [Exp.subst, Subst.comp_lift]
+  | letin _ _ ih0 ih1 =>
+    simp_all [Exp.subst, Subst.comp_lift]
+  | unpack _ _ ih0 ih1 =>
+    simp_all [Exp.subst, Subst.comp_lift]
   | unit => rfl
   | btrue => rfl
   | bfalse => rfl
-  | read =>
+  | read _ =>
     simp [Exp.subst, Var.subst_comp]
-  | write =>
+  | write _ _ =>
     simp [Exp.subst, Var.subst_comp]
-  | cond ih0 ih1 =>
-    simp [Exp.subst, Var.subst_comp]
+  | cond _ _ _ ih0 ih1 =>
+    simp_all [Exp.subst, Var.subst_comp]
 
 theorem Subst.lift_id :
   (Subst.id (s:=s)).lift (k:=k) = Subst.id := by
@@ -474,7 +474,7 @@ theorem Subst.lift_id :
 
 theorem Var.subst_id {t : Var .var s} :
   t.subst Subst.id = t := by
-  induction t with
+  cases t with
   | bound => simp [Var.subst, Subst.id]
   | free => rfl
 
@@ -482,9 +482,9 @@ theorem CaptureSet.subst_id {t : CaptureSet s} :
   t.subst Subst.id = t := by
   induction t with
   | empty => rfl
-  | union ih0 ih1 =>
-    simp [CaptureSet.subst]
-  | var =>
+  | union _ _ ih0 ih1 =>
+    simp_all [CaptureSet.subst]
+  | var _ =>
     simp [CaptureSet.subst, Var.subst_id]
   | cvar => simp [CaptureSet.subst, Subst.id]
 
@@ -492,7 +492,7 @@ theorem CaptureBound.subst_id {t : CaptureBound s} :
   t.subst Subst.id = t := by
   induction t with
   | unbound => rfl
-  | bound =>
+  | bound _ =>
     simp [CaptureBound.subst, CaptureSet.subst_id]
 
 theorem Ty.subst_id {tySort : TySort} {t : Ty tySort s} :
@@ -500,54 +500,54 @@ theorem Ty.subst_id {tySort : TySort} {t : Ty tySort s} :
   induction t with
   | top => rfl
   | tvar => simp [Ty.subst, Subst.id]
-  | arrow ih0 ih1 =>
-    simp [Ty.subst, Subst.lift_id]
-  | poly ih0 ih1 =>
-    simp [Ty.subst, Subst.lift_id]
-  | cpoly ih0 =>
-    simp [Ty.subst, CaptureBound.subst_id, Subst.lift_id]
+  | arrow _ _ ih0 ih1 =>
+    simp_all [Ty.subst, Subst.lift_id]
+  | poly _ _ ih0 ih1 =>
+    simp_all [Ty.subst, Subst.lift_id]
+  | cpoly _ _ ih0 =>
+    simp_all [Ty.subst, CaptureBound.subst_id, Subst.lift_id]
   | unit => rfl
   | cap => rfl
   | bool => rfl
   | cell => rfl
-  | capt ih0 =>
-    simp [Ty.subst, CaptureSet.subst_id]
-  | exi ih0 =>
-    simp [Ty.subst, Subst.lift_id]
-  | typ ih0 =>
-    simp [Ty.subst]
+  | capt _ _ ih0 =>
+    simp_all [Ty.subst, CaptureSet.subst_id]
+  | exi _ ih0 =>
+    simp_all [Ty.subst, Subst.lift_id]
+  | typ _ ih0 =>
+    simp_all [Ty.subst]
 
 theorem Exp.subst_id {t : Exp s} :
   t.subst Subst.id = t := by
   induction t with
-  | var =>
+  | var _ =>
     simp [Exp.subst, Var.subst_id]
-  | abs ih0 =>
-    simp [Exp.subst, CaptureSet.subst_id, Ty.subst_id, Subst.lift_id]
-  | tabs ih0 =>
-    simp [Exp.subst, CaptureSet.subst_id, Ty.subst_id, Subst.lift_id]
-  | cabs ih0 =>
-    simp [Exp.subst, CaptureSet.subst_id, CaptureBound.subst_id, Subst.lift_id]
-  | pack =>
+  | abs _ _ _ ih0 =>
+    simp_all [Exp.subst, CaptureSet.subst_id, Ty.subst_id, Subst.lift_id]
+  | tabs _ _ _ ih0 =>
+    simp_all [Exp.subst, CaptureSet.subst_id, Ty.subst_id, Subst.lift_id]
+  | cabs _ _ _ ih0 =>
+    simp_all [Exp.subst, CaptureSet.subst_id, CaptureBound.subst_id, Subst.lift_id]
+  | pack _ _ =>
     simp [Exp.subst, CaptureSet.subst_id, Var.subst_id]
-  | app =>
+  | app _ _ =>
     simp [Exp.subst, Var.subst_id]
-  | tapp =>
+  | tapp _ _ =>
     simp [Exp.subst, Var.subst_id, Ty.subst_id]
-  | capp =>
+  | capp _ _ =>
     simp [Exp.subst, Var.subst_id, CaptureSet.subst_id]
-  | letin ih0 ih1 =>
-    simp [Exp.subst, Subst.lift_id]
-  | unpack ih0 ih1 =>
-    simp [Exp.subst, Subst.lift_id]
+  | letin _ _ ih0 ih1 =>
+    simp_all [Exp.subst, Subst.lift_id]
+  | unpack _ _ ih0 ih1 =>
+    simp_all [Exp.subst, Subst.lift_id]
   | unit => rfl
   | btrue => rfl
   | bfalse => rfl
-  | read =>
+  | read _ =>
     simp [Exp.subst, Var.subst_id]
-  | write =>
+  | write _ _ =>
     simp [Exp.subst, Var.subst_id]
-  | cond ih0 ih1 =>
-    simp [Exp.subst, Var.subst_id]
+  | cond _ _ _ ih0 ih1 =>
+    simp_all [Exp.subst, Var.subst_id]
 
 end CC

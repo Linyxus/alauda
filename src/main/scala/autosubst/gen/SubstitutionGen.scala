@@ -9,6 +9,7 @@ object SubstitutionGen:
     val ns = spec.name
     val sb = new StringBuilder
     val kindsWithSubst = spec.kinds.filter(_.substImage.isDefined)
+    val kindsRenameOnly = spec.kinds.filter(_.substImage.isEmpty)
     val sortOrder = topoSortForSubst(spec)
     val sortsWithSubst = sortOrder.filter(s => hasSubst(spec, s))
 
@@ -44,9 +45,12 @@ object SubstitutionGen:
     for kind <- kindsWithSubst do
       sb ++= genSubstLiftThereEq(spec, kind)
       sb ++= "\n"
+    for kind <- kindsRenameOnly do
+      sb ++= genSubstLiftThereEqRenameOnly(spec, kind)
+      sb ++= "\n"
 
     // 9. Rename.lift_there_*_eq
-    for kind <- kindsWithSubst do
+    for kind <- spec.kinds do
       sb ++= genRenameLiftThereEq(spec, kind)
       sb ++= "\n"
 
@@ -60,6 +64,9 @@ object SubstitutionGen:
     // 11. Kind.weaken_subst_comm_liftMany (BVar-level, per kind)
     for kind <- kindsWithSubst do
       sb ++= genBVarWeakenLiftMany(spec, kind)
+      sb ++= "\n"
+    for kind <- kindsRenameOnly do
+      sb ++= genBVarWeakenLiftManyRenameOnly(spec, kind)
       sb ++= "\n"
 
     // 12-13. Sort.weaken_subst_comm + _base (per sort with .subst)
@@ -153,6 +160,22 @@ object SubstitutionGen:
         case _ => None
     else None
 
+  /** Count (total fields to wildcard, IH count) for induction pattern bindings.
+    * Lean 4 induction binds: all field values, then one IH per recursive field. */
+  private def inductionBindingCounts(sort: SortDef, ctor: Constructor): (Int, Int) =
+    val totalFields = ctor.fields.length
+    val ihs = ctor.fields.count(f => f.fieldType match
+      case FieldType.SortRef(s, _) if s == sort.name => true
+      case _ => false
+    )
+    (totalFields, ihs)
+
+  private def inductionPattern(sort: SortDef, ctor: Constructor): String =
+    val (fieldCount, ihCount) = inductionBindingCounts(sort, ctor)
+    val wildcards = (0 until fieldCount).map(_ => "_").mkString(" ")
+    val ihNames = (0 until ihCount).map(i => s"ih$i").mkString(" ")
+    List(wildcards, ihNames).filter(_.nonEmpty).mkString(" ")
+
   private def imageTypeStr(kind: VarKind, sigVar: String = "s2"): String =
     val img = kind.substImage.get
     val idxStr = img.index.map(i => s" .$i").getOrElse("")
@@ -217,6 +240,8 @@ object SubstitutionGen:
     sb ++= "structure Subst (s1 s2 : Sig) where\n"
     for kind <- kinds do
       sb ++= s"  ${kind.name} : BVar s1 .${kind.name} -> ${imageTypeStr(kind)}\n"
+    for kind <- spec.kinds.filter(_.substImage.isEmpty) do
+      sb ++= s"  ${kind.name} : BVar s1 .${kind.name} -> BVar s2 .${kind.name}\n"
     sb.toString
 
   // ===== 2. Subst.lift =====
@@ -230,6 +255,11 @@ object SubstitutionGen:
       sb ++= s"    cases x\n"
       sb ++= s"    case here => exact .$ctorName .here\n"
       sb ++= s"    case there x => exact (σ.${kind.name} x).rename Rename.succ\n"
+    for kind <- spec.kinds.filter(_.substImage.isEmpty) do
+      sb ++= s"  ${kind.name} := fun x => by\n"
+      sb ++= s"    cases x\n"
+      sb ++= s"    case here => exact .here\n"
+      sb ++= s"    case there x => exact (σ.${kind.name} x).there\n"
     sb.toString
 
   // ===== 3. Subst.liftMany =====
@@ -248,6 +278,8 @@ object SubstitutionGen:
     for kind <- kinds do
       val (_, ctorName) = findVarCtor(spec, kind)
       sb ++= s"  ${kind.name} := fun x => .$ctorName x\n"
+    for kind <- spec.kinds.filter(_.substImage.isEmpty) do
+      sb ++= s"  ${kind.name} := fun x => x\n"
     sb.toString
 
   // ===== 5. Per-sort .subst =====
@@ -299,11 +331,7 @@ object SubstitutionGen:
     val liftedSigma = field.binders.foldLeft("σ") { (acc, _) => s"$acc.lift" }
     field.fieldType match
       case FieldType.BVarRef(kindName) =>
-        if kindsWithSubst.exists(_.name == kindName) then
-          s"($liftedSigma.$kindName $name)"
-        else
-          // Kind without substImage: pass through unchanged
-          name
+        s"($liftedSigma.$kindName $name)"
       case FieldType.SortRef(_, _) =>
         s"($name.subst $liftedSigma)"
       case FieldType.VarRef(_) =>
@@ -314,18 +342,19 @@ object SubstitutionGen:
   // ===== 6. Subst.funext =====
 
   private def genFunext(spec: LangSpec, kinds: List[VarKind]): String =
+    val allKinds = kinds ++ spec.kinds.filter(_.substImage.isEmpty)
     val sb = new StringBuilder
     sb ++= "theorem Subst.funext {σ1 σ2 : Subst s1 s2}\n"
-    for kind <- kinds do
+    for kind <- allKinds do
       sb ++= s"  (h${kind.name} : ∀ x, σ1.${kind.name} x = σ2.${kind.name} x)\n"
     sb ++= "  : σ1 = σ2 := by\n"
     sb ++= "  cases σ1; cases σ2\n"
     sb ++= "  simp only [Subst.mk.injEq]\n"
-    if kinds.length == 1 then
-      sb ++= s"  funext x; exact h${kinds.head.name} x\n"
+    if allKinds.length == 1 then
+      sb ++= s"  funext x; exact h${allKinds.head.name} x\n"
     else
-      for (kind, i) <- kinds.zipWithIndex do
-        if i < kinds.length - 1 then
+      for (kind, i) <- allKinds.zipWithIndex do
+        if i < allKinds.length - 1 then
           sb ++= "  constructor\n"
           sb ++= s"  · funext x; exact h${kind.name} x\n"
         else
@@ -339,6 +368,8 @@ object SubstitutionGen:
     sb ++= "def Subst.comp (σ1 : Subst s1 s2) (σ2 : Subst s2 s3) : Subst s1 s3 where\n"
     for kind <- kinds do
       sb ++= s"  ${kind.name} := fun x => (σ1.${kind.name} x).subst σ2\n"
+    for kind <- spec.kinds.filter(_.substImage.isEmpty) do
+      sb ++= s"  ${kind.name} := fun x => σ2.${kind.name} (σ1.${kind.name} x)\n"
     sb.toString
 
   // ===== 8. Subst.lift_there_*_eq =====
@@ -346,6 +377,11 @@ object SubstitutionGen:
   private def genSubstLiftThereEq(spec: LangSpec, kind: VarKind): String =
     s"theorem Subst.lift_there_${kind.name}_eq {σ : Subst s1 s2} {x : BVar s1 .${kind.name}} :\n" +
     s"  (σ.lift (k:=k)).${kind.name} (.there x) = (σ.${kind.name} x).rename Rename.succ := by\n" +
+    s"  rfl\n"
+
+  private def genSubstLiftThereEqRenameOnly(spec: LangSpec, kind: VarKind): String =
+    s"theorem Subst.lift_there_${kind.name}_eq {σ : Subst s1 s2} {x : BVar s1 .${kind.name}} :\n" +
+    s"  (σ.lift (k:=k)).${kind.name} (.there x) = (σ.${kind.name} x).there := by\n" +
     s"  rfl\n"
 
   // ===== 9. Rename.lift_there_*_eq =====
@@ -389,6 +425,27 @@ object SubstitutionGen:
     sb ++= s"      grind\n"
     sb.toString
 
+  private def genBVarWeakenLiftManyRenameOnly(spec: LangSpec, kind: VarKind): String =
+    val cap = capitalizeKind(kind)
+    val sb = new StringBuilder
+    sb ++= s"theorem $cap.weaken_subst_comm_liftMany {x : BVar (s1 ++ K) .${kind.name}} {σ : Subst s1 s2} :\n"
+    sb ++= s"  (((Rename.succ (k:=k0)).liftMany K).var ((σ.liftMany K).${kind.name} x)) =\n"
+    sb ++= s"  (σ.lift (k:=k0).liftMany K).${kind.name} (((Rename.succ (k:=k0)).liftMany K).var x) := by\n"
+    sb ++= s"  induction K with\n"
+    sb ++= s"  | nil =>\n"
+    sb ++= s"    simp [Subst.liftMany, Rename.liftMany]\n"
+    sb ++= s"    cases x with\n"
+    sb ++= s"    | here => simp [Subst.lift, Rename.succ]\n"
+    sb ++= s"    | there x => rfl\n"
+    sb ++= s"  | cons k K ih =>\n"
+    sb ++= s"    simp [Subst.liftMany, Rename.liftMany]\n"
+    sb ++= s"    cases x with\n"
+    sb ++= s"    | here => rfl\n"
+    sb ++= s"    | there x =>\n"
+    sb ++= s"      simp only [Rename.lift_there_${kind.name}_eq, Subst.lift_there_${kind.name}_eq]\n"
+    sb ++= s"      exact congrArg BVar.there ih\n"
+    sb.toString
+
   // ===== 12. Sort.weaken_subst_comm (liftMany version) =====
 
   private def genSortWeakenSubstComm(spec: LangSpec, sort: SortDef, kindsWithSubst: List[VarKind]): String =
@@ -430,6 +487,13 @@ object SubstitutionGen:
         case _ => false
     }
 
+    // Collect BVarRef fields (need weaken lemmas in simp)
+    val bvarRefFields = ctor.fields.zipWithIndex.filter { (f, _) =>
+      f.fieldType match
+        case FieldType.BVarRef(_) => true
+        case _ => false
+    }
+
     // Generate pattern with field names
     val fieldPatterns = ctor.fields.zipWithIndex.map { (f, j) =>
       f.fieldType match
@@ -447,25 +511,44 @@ object SubstitutionGen:
       val kExtended = f.binders.foldLeft("K") { (acc, binder) => s"$acc,$binder" }
       sb ++= s"    have ih$j := ${sortName}.weaken_subst_comm (t:=f$j) (σ:=σ) (K:=$kExtended) (k0:=k0)\n"
 
+    // Collect BVar weaken lemma names needed
+    val bvarWeakenLemmas = bvarRefFields.flatMap { (f, _) =>
+      f.fieldType match
+        case FieldType.BVarRef(kindName) =>
+          val kind = spec.kinds.find(_.name == kindName).orElse(
+            // For _index in Kind-indexed sorts
+            if kindName == "_index" then substSpecialization(spec, sort) else None
+          )
+          kind.map(k => s"${capitalizeKind(k)}.weaken_subst_comm_liftMany")
+        case _ => None
+    }.distinct
+
     // Determine which fields have binders
     val fieldsWithBinders = sortRefFields.filter(_._1.binders.nonEmpty)
     val fieldsWithoutBinders = sortRefFields.filter(_._1.binders.isEmpty)
 
     if fieldsWithBinders.isEmpty then
-      // All without binders: simp with all IHs
+      // All without binders: simp with all IHs + BVar weaken lemmas
       val ihNames = sortRefFields.map((_, j) => s"ih$j")
-      sb ++= s"    simp [${sort.name}.subst, ${sort.name}.rename, ${ihNames.mkString(", ")}]\n"
-    else if fieldsWithBinders.length == 1 then
-      // One binder field: simp with non-binder IHs, exact the binder one
+      val allLemmas = List(s"${sort.name}.subst", s"${sort.name}.rename") ++ ihNames ++ bvarWeakenLemmas
+      sb ++= s"    simp [${allLemmas.mkString(", ")}]\n"
+    else if fieldsWithBinders.length == 1 && bvarWeakenLemmas.isEmpty then
+      // One binder field, no BVar weaken: simp with non-binder IHs, exact the binder one
       val nonBinderIhs = fieldsWithoutBinders.map((_, j) => s"ih$j")
       val binderIh = fieldsWithBinders.head._2
       val simpLemmas = List(s"${sort.name}.subst", s"${sort.name}.rename") ++ nonBinderIhs
       sb ++= s"    simp [${simpLemmas.mkString(", ")}]\n"
       sb ++= s"    exact ih$binderIh\n"
     else
-      // Multiple binder fields: simp with all IHs (hope for the best)
-      val ihNames = sortRefFields.map((_, j) => s"ih$j")
-      sb ++= s"    simp [${sort.name}.subst, ${sort.name}.rename, ${ihNames.mkString(", ")}]\n"
+      // Multiple binder fields or BVar weaken needed: simp with non-binder IHs + BVar weaken, exact tuple of binder IHs
+      val nonBinderIhs = fieldsWithoutBinders.map((_, j) => s"ih$j")
+      val simpLemmas = List(s"${sort.name}.subst", s"${sort.name}.rename") ++ nonBinderIhs ++ bvarWeakenLemmas
+      sb ++= s"    simp [${simpLemmas.mkString(", ")}]\n"
+      if fieldsWithBinders.length == 1 then
+        sb ++= s"    exact ih${fieldsWithBinders.head._2}\n"
+      else if fieldsWithBinders.nonEmpty then
+        val binderIhExprs = fieldsWithBinders.map((_, j) => s"ih$j")
+        sb ++= s"    exact ⟨${binderIhExprs.mkString(", ")}⟩\n"
 
     sb.toString
 
@@ -494,6 +577,9 @@ object SubstitutionGen:
       sb ++= s"        lhs; simp only [Subst.comp, Subst.lift_there_${kind.name}_eq]\n"
       sb ++= s"      simp only [Subst.lift_there_${kind.name}_eq]\n"
       sb ++= s"      simp only [${img.sortName}.weaken_subst_comm_base, Subst.comp]\n"
+    for kind <- spec.kinds.filter(_.substImage.isEmpty) do
+      sb ++= s"  · intro x\n"
+      sb ++= s"    cases x <;> rfl\n"
     sb.toString
 
   // ===== 15. Subst.comp_liftMany =====
@@ -515,7 +601,11 @@ object SubstitutionGen:
 
     sb ++= s"theorem ${sort.name}.subst_comp$sp {t : ${sort.name}$iv s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :\n"
     sb ++= s"  (t.subst σ1).subst σ2 = t.subst (σ1.comp σ2) := by\n"
-    sb ++= s"  induction t generalizing s2 s3 with\n"
+    val isKindIndexed = sort.index.contains("Kind")
+    if isKindIndexed then
+      sb ++= s"  cases t with\n"
+    else
+      sb ++= s"  induction t generalizing s2 s3 with\n"
 
     for ctor <- sort.constructors do
       sb ++= genSubstCompCase(spec, sort, ctor, kindsWithSubst)
@@ -549,7 +639,7 @@ object SubstitutionGen:
           lemmas += s"$s.subst_comp"
         case FieldType.VarRef(_) =>
           lemmas += "Var.subst_comp"
-        case FieldType.BVarRef(k) if kindsWithSubst.exists(_.name == k) =>
+        case FieldType.BVarRef(_) =>
           lemmas += "Subst.comp"
         case _ => ()
 
@@ -558,17 +648,15 @@ object SubstitutionGen:
 
     val uniqueLemmas = lemmas.distinct.toList
 
-    // Count IHs: only for fields of the SAME sort (self-referencing)
-    val ihCount = ctor.fields.count(f => f.fieldType match
-      case FieldType.SortRef(s, _) if s == sort.name => true
-      case _ => false
-    )
-    val ihNames = (0 until ihCount).map(i => s"ih$i").mkString(" ")
-    val ihPrefix = if ihNames.nonEmpty then s" $ihNames" else ""
+    val pattern = inductionPattern(sort, ctor)
+    val (_, ihCount) = inductionBindingCounts(sort, ctor)
+    val ihPrefix = if pattern.nonEmpty then s" $pattern" else ""
 
-    // Also count non-self sort refs (they don't get IHs from induction, but we list _ for them)
-    // Actually, induction only generates IHs for recursive occurrences of the same type
-    s"  | ${ctor.name}$ihPrefix =>\n    simp [${uniqueLemmas.mkString(", ")}]\n"
+    // IHs from induction are universally quantified, so use simp_all instead of passing them to simp
+    if ihCount > 0 then
+      s"  | ${ctor.name}$ihPrefix =>\n    simp_all [${uniqueLemmas.mkString(", ")}]\n"
+    else
+      s"  | ${ctor.name}$ihPrefix =>\n    simp [${uniqueLemmas.mkString(", ")}]\n"
 
   // ===== 17. Subst.lift_id =====
 
@@ -578,6 +666,9 @@ object SubstitutionGen:
     sb ++= "  (Subst.id (s:=s)).lift (k:=k) = Subst.id := by\n"
     sb ++= "  apply Subst.funext\n"
     for kind <- kinds do
+      sb ++= s"  · intro x\n"
+      sb ++= s"    cases x <;> rfl\n"
+    for kind <- spec.kinds.filter(_.substImage.isEmpty) do
       sb ++= s"  · intro x\n"
       sb ++= s"    cases x <;> rfl\n"
     sb.toString
@@ -590,7 +681,11 @@ object SubstitutionGen:
 
     sb ++= s"theorem ${sort.name}.subst_id$sp {t : ${sort.name}$iv s} :\n"
     sb ++= s"  t.subst Subst.id = t := by\n"
-    sb ++= s"  induction t with\n"
+    val isKindIndexed = sort.index.contains("Kind")
+    if isKindIndexed then
+      sb ++= s"  cases t with\n"
+    else
+      sb ++= s"  induction t with\n"
 
     for ctor <- sort.constructors do
       sb ++= genSubstIdCase(spec, sort, ctor, kindsWithSubst)
@@ -622,7 +717,7 @@ object SubstitutionGen:
           lemmas += s"$s.subst_id"
         case FieldType.VarRef(_) =>
           lemmas += "Var.subst_id"
-        case FieldType.BVarRef(k) if kindsWithSubst.exists(_.name == k) =>
+        case FieldType.BVarRef(_) =>
           lemmas += "Subst.id"
         case _ => ()
 
@@ -631,11 +726,11 @@ object SubstitutionGen:
 
     val uniqueLemmas = lemmas.distinct.toList
 
-    val ihCount = ctor.fields.count(f => f.fieldType match
-      case FieldType.SortRef(s, _) if s == sort.name => true
-      case _ => false
-    )
-    val ihNames = (0 until ihCount).map(i => s"ih$i").mkString(" ")
-    val ihPrefix = if ihNames.nonEmpty then s" $ihNames" else ""
+    val pattern = inductionPattern(sort, ctor)
+    val (_, ihCount) = inductionBindingCounts(sort, ctor)
+    val ihPrefix = if pattern.nonEmpty then s" $pattern" else ""
 
-    s"  | ${ctor.name}$ihPrefix =>\n    simp [${uniqueLemmas.mkString(", ")}]\n"
+    if ihCount > 0 then
+      s"  | ${ctor.name}$ihPrefix =>\n    simp_all [${uniqueLemmas.mkString(", ")}]\n"
+    else
+      s"  | ${ctor.name}$ihPrefix =>\n    simp [${uniqueLemmas.mkString(", ")}]\n"
