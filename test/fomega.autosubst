@@ -1,0 +1,35 @@
+namespace FOmega
+
+kinds:
+  var "x" => Exp
+  tvar "X" => Ty
+  kvar "K" => Knd
+
+inductive Knd : Sig -> Type
+| kvar : BVar s .kvar -> Knd s
+| star : Knd s
+| karrow : Knd s -> Knd s -> Knd s
+
+inductive Ty : Sig -> Type
+| tvar : BVar s .tvar -> Ty s
+| arrow : Ty s -> Ty s -> Ty s
+| forall_ : Knd s -> Ty (s,X) -> Ty s
+| lam : Knd s -> Ty (s,X) -> Ty s
+| app : Ty s -> Ty s -> Ty s
+| forallK : Ty (s,K) -> Ty s
+| prod : Ty s -> Ty s -> Ty s
+| unit : Ty s
+
+inductive Exp : Sig -> Type
+| var : BVar s .var -> Exp s
+| abs : Ty s -> Exp (s,x) -> Exp s
+| app : Exp s -> Exp s -> Exp s
+| tabs : Knd s -> Exp (s,X) -> Exp s
+| tapp : Exp s -> Ty s -> Exp s
+| kabs : Exp (s,K) -> Exp s
+| kapp : Exp s -> Knd s -> Exp s
+| pair : Exp s -> Exp s -> Exp s
+| fst : Exp s -> Exp s
+| snd : Exp s -> Exp s
+| letin : Exp s -> Exp (s,x) -> Exp s
+| unit : Exp s
