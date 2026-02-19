@@ -1,10 +1,10 @@
 import Mathlib.Tactic
 
-namespace RefCalc
+namespace FExist
 
 inductive Kind : Type where
 | var : Kind
-| lvar : Kind
+| tvar : Kind
 
 @[reducible]
 def Sig : Type := List Kind
@@ -13,7 +13,7 @@ instance Sig.instEmptyCollection : EmptyCollection Sig where
   emptyCollection := []
 
 def Sig.extend_var : Sig -> Sig := fun s => .var :: s
-def Sig.extend_lvar : Sig -> Sig := fun s => .lvar :: s
+def Sig.extend_tvar : Sig -> Sig := fun s => .tvar :: s
 def Sig.extend : Sig -> Kind -> Sig := fun s k => k :: s
 
 def Sig.extendMany : Sig -> Sig -> Sig
@@ -21,7 +21,7 @@ def Sig.extendMany : Sig -> Sig -> Sig
 | s, k :: K => (s.extendMany K).extend k
 
 postfix:80 ",x" => Sig.extend_var
-postfix:80 ",l" => Sig.extend_lvar
+postfix:80 ",X" => Sig.extend_tvar
 infixl:65 ",," => Sig.extend
 
 instance Sig.instAppend : Append Sig where
@@ -79,4 +79,4 @@ theorem Rename.lift_comp {f1 : Rename s1 s2} {f2 : Rename s2 s3} :
   intro k x
   cases x <;> rfl
 
-end RefCalc
+end FExist
