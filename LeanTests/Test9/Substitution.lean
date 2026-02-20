@@ -5,7 +5,7 @@ namespace Effect
 structure Subst (s1 s2 : Sig) where
   var : BVar s1 .var -> Exp s2
   tvar : BVar s1 .tvar -> Ty s2
-  evar : BVar s1 .evar -> BVar s2 .evar
+  evar : BVar s1 .evar -> Eff s2
 
 def Subst.lift (σ : Subst s1 s2) : Subst (s1,,k) (s2,,k) where
   var := fun x => by
@@ -18,8 +18,8 @@ def Subst.lift (σ : Subst s1 s2) : Subst (s1,,k) (s2,,k) where
     case there x => exact (σ.tvar x).rename Rename.succ
   evar := fun x => by
     cases x
-    case here => exact .here
-    case there x => exact (σ.evar x).there
+    case here => exact .evar .here
+    case there x => exact (σ.evar x).rename Rename.succ
 
 def Subst.liftMany (σ : Subst s1 s2) (K : Sig) : Subst (s1 ++ K) (s2 ++ K) :=
   match K with
@@ -29,10 +29,10 @@ def Subst.liftMany (σ : Subst s1 s2) (K : Sig) : Subst (s1 ++ K) (s2 ++ K) :=
 def Subst.id {s : Sig} : Subst s s where
   var := fun x => .var x
   tvar := fun x => .tvar x
-  evar := fun x => x
+  evar := fun x => .evar x
 
 def Eff.subst : Eff s1 -> Subst s1 s2 -> Eff s2
-| .evar x0, σ => .evar (σ.evar x0)
+| .evar x0, σ => σ.evar x0
 | .pure, _ => .pure
 | .exn, _ => .exn
 | .union a0 a1, σ => .union (a0.subst σ) (a1.subst σ)
@@ -77,7 +77,7 @@ theorem Subst.funext {σ1 σ2 : Subst s1 s2}
 def Subst.comp (σ1 : Subst s1 s2) (σ2 : Subst s2 s3) : Subst s1 s3 where
   var := fun x => (σ1.var x).subst σ2
   tvar := fun x => (σ1.tvar x).subst σ2
-  evar := fun x => σ2.evar (σ1.evar x)
+  evar := fun x => (σ1.evar x).subst σ2
 
 theorem Subst.lift_there_var_eq {σ : Subst s1 s2} {x : BVar s1 .var} :
   (σ.lift (k:=k)).var (.there x) = (σ.var x).rename Rename.succ := by
@@ -88,7 +88,7 @@ theorem Subst.lift_there_tvar_eq {σ : Subst s1 s2} {x : BVar s1 .tvar} :
   rfl
 
 theorem Subst.lift_there_evar_eq {σ : Subst s1 s2} {x : BVar s1 .evar} :
-  (σ.lift (k:=k)).evar (.there x) = (σ.evar x).there := by
+  (σ.lift (k:=k)).evar (.there x) = (σ.evar x).rename Rename.succ := by
   rfl
 
 theorem Rename.lift_there_var_eq {f : Rename s1 s2} {x : BVar s1 .var} :
@@ -110,6 +110,10 @@ theorem Exp.weaken_rename_comm {t : Exp s1} {f : Rename s1 s2} :
 theorem Ty.weaken_rename_comm {t : Ty s1} {f : Rename s1 s2} :
   (t.rename Rename.succ).rename (f.lift (k:=k0)) = (t.rename f).rename (Rename.succ) := by
   simp [Ty.rename_comp, Rename.succ_lift_comm]
+
+theorem Eff.weaken_rename_comm {t : Eff s1} {f : Rename s1 s2} :
+  (t.rename Rename.succ).rename (f.lift (k:=k0)) = (t.rename f).rename (Rename.succ) := by
+  simp [Eff.rename_comp, Rename.succ_lift_comm]
 
 theorem Var.weaken_subst_comm_liftMany {x : BVar (s1 ++ K) .var} {σ : Subst s1 s2} :
   ((σ.liftMany K).var x).rename ((Rename.succ (k:=k0)).liftMany K) =
@@ -150,7 +154,7 @@ theorem Tvar.weaken_subst_comm_liftMany {x : BVar (s1 ++ K) .tvar} {σ : Subst s
       grind
 
 theorem Evar.weaken_subst_comm_liftMany {x : BVar (s1 ++ K) .evar} {σ : Subst s1 s2} :
-  (((Rename.succ (k:=k0)).liftMany K).var ((σ.liftMany K).evar x)) =
+  ((σ.liftMany K).evar x).rename ((Rename.succ (k:=k0)).liftMany K) =
   (σ.lift (k:=k0).liftMany K).evar (((Rename.succ (k:=k0)).liftMany K).var x) := by
   induction K with
   | nil =>
@@ -163,15 +167,18 @@ theorem Evar.weaken_subst_comm_liftMany {x : BVar (s1 ++ K) .evar} {σ : Subst s
     cases x with
     | here => rfl
     | there x =>
-      simp only [Rename.lift_there_evar_eq, Subst.lift_there_evar_eq]
-      exact congrArg BVar.there ih
+      simp [Rename.lift_there_evar_eq]
+      simp [Subst.lift_there_evar_eq]
+      simp [Eff.weaken_rename_comm]
+      grind
 
 theorem Eff.weaken_subst_comm {t : Eff (s1 ++ K)} {σ : Subst s1 s2} :
   (t.subst (σ.liftMany K)).rename ((Rename.succ (k:=k0)).liftMany K) =
   (t.rename ((Rename.succ (k:=k0)).liftMany K)).subst (σ.lift (k:=k0).liftMany K) := by
   match t with
-  | .evar _ =>
-    simp [Eff.subst, Eff.rename, Evar.weaken_subst_comm_liftMany]
+  | .evar x =>
+    simp [Eff.subst, Eff.rename]
+    exact Evar.weaken_subst_comm_liftMany
   | .pure => rfl
   | .exn => rfl
   | .union f0 f1 =>
@@ -294,7 +301,13 @@ theorem Subst.comp_lift {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} {k : Kind} :
       simp only [Subst.lift_there_tvar_eq]
       simp only [Ty.weaken_subst_comm_base, Subst.comp]
   · intro x
-    cases x <;> rfl
+    cases x with
+    | here => rfl
+    | there x0 =>
+      conv =>
+        lhs; simp only [Subst.comp, Subst.lift_there_evar_eq]
+      simp only [Subst.lift_there_evar_eq]
+      simp only [Eff.weaken_subst_comm_base, Subst.comp]
 
 theorem Subst.comp_liftMany {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} {K : Sig} :
   (σ1.liftMany K).comp (σ2.liftMany K) = (σ1.comp σ2).liftMany K := by

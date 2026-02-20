@@ -3,7 +3,7 @@ namespace Effect
 kinds:
   var "x" => Exp
   tvar "X" => Ty
-  evar "e"
+  evar "e" => Eff
 
 inductive Eff : Sig -> Type
   | evar : BVar s .evar -> Eff s
