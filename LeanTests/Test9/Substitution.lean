@@ -34,7 +34,6 @@ def Subst.id {s : Sig} : Subst s s where
 def Eff.subst : Eff s1 -> Subst s1 s2 -> Eff s2
 | .evar x0, σ => .evar (σ.evar x0)
 | .pure, _ => .pure
-| .io, _ => .io
 | .exn, _ => .exn
 | .union a0 a1, σ => .union (a0.subst σ) (a1.subst σ)
 
@@ -44,9 +43,7 @@ def Ty.subst : Ty s1 -> Subst s1 s2 -> Ty s2
 | .forall_ a0, σ => .forall_ (a0.subst σ.lift)
 | .eforall a0, σ => .eforall (a0.subst σ.lift)
 | .prod a0 a1, σ => .prod (a0.subst σ) (a1.subst σ)
-| .sum a0 a1, σ => .sum (a0.subst σ) (a1.subst σ)
 | .unit, _ => .unit
-| .handler a0 a1 a2 a3, σ => .handler (a0.subst σ) (a1.subst σ) (a2.subst σ) (a3.subst σ)
 
 def Exp.subst : Exp s1 -> Subst s1 s2 -> Exp s2
 | .var x0, σ => σ.var x0
@@ -59,11 +56,8 @@ def Exp.subst : Exp s1 -> Subst s1 s2 -> Exp s2
 | .pair a0 a1, σ => .pair (a0.subst σ) (a1.subst σ)
 | .fst a0, σ => .fst (a0.subst σ)
 | .snd a0, σ => .snd (a0.subst σ)
-| .inl a0 a1, σ => .inl (a0.subst σ) (a1.subst σ)
-| .inr a0 a1, σ => .inr (a0.subst σ) (a1.subst σ)
-| .case_ a0 a1 a2, σ => .case_ (a0.subst σ) (a1.subst σ.lift) (a2.subst σ.lift)
-| .perform a0 a1, σ => .perform (a0.subst σ) (a1.subst σ)
-| .handle a0 a1, σ => .handle (a0.subst σ) (a1.subst σ.lift)
+| .throw a0, σ => .throw (a0.subst σ)
+| .trycatch a0 a1, σ => .trycatch (a0.subst σ) (a1.subst σ.lift)
 | .letin a0 a1, σ => .letin (a0.subst σ) (a1.subst σ.lift)
 | .unit, _ => .unit
 
@@ -179,7 +173,6 @@ theorem Eff.weaken_subst_comm {t : Eff (s1 ++ K)} {σ : Subst s1 s2} :
   | .evar _ =>
     simp [Eff.subst, Eff.rename, Evar.weaken_subst_comm_liftMany]
   | .pure => rfl
-  | .io => rfl
   | .exn => rfl
   | .union f0 f1 =>
     have ih0 := Eff.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
@@ -214,17 +207,7 @@ theorem Ty.weaken_subst_comm {t : Ty (s1 ++ K)} {σ : Subst s1 s2} :
     have ih0 := Ty.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
     have ih1 := Ty.weaken_subst_comm (t:=f1) (σ:=σ) (K:=K) (k0:=k0)
     simp [Ty.subst, Ty.rename, ih0, ih1]
-  | .sum f0 f1 =>
-    have ih0 := Ty.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
-    have ih1 := Ty.weaken_subst_comm (t:=f1) (σ:=σ) (K:=K) (k0:=k0)
-    simp [Ty.subst, Ty.rename, ih0, ih1]
   | .unit => rfl
-  | .handler f0 f1 f2 f3 =>
-    have ih0 := Eff.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
-    have ih1 := Eff.weaken_subst_comm (t:=f1) (σ:=σ) (K:=K) (k0:=k0)
-    have ih2 := Ty.weaken_subst_comm (t:=f2) (σ:=σ) (K:=K) (k0:=k0)
-    have ih3 := Ty.weaken_subst_comm (t:=f3) (σ:=σ) (K:=K) (k0:=k0)
-    simp [Ty.subst, Ty.rename, ih0, ih1, ih2, ih3]
 
 theorem Ty.weaken_subst_comm_base {t : Ty s1} {σ : Subst s1 s2} :
   (t.subst σ).rename (Rename.succ (k:=k0)) = (t.rename Rename.succ).subst (σ.lift (k:=k0)) :=
@@ -272,25 +255,10 @@ theorem Exp.weaken_subst_comm {t : Exp (s1 ++ K)} {σ : Subst s1 s2} :
   | .snd f0 =>
     have ih0 := Exp.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
     simp [Exp.subst, Exp.rename, ih0]
-  | .inl f0 f1 =>
-    have ih0 := Ty.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
-    have ih1 := Exp.weaken_subst_comm (t:=f1) (σ:=σ) (K:=K) (k0:=k0)
-    simp [Exp.subst, Exp.rename, ih0, ih1]
-  | .inr f0 f1 =>
-    have ih0 := Ty.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
-    have ih1 := Exp.weaken_subst_comm (t:=f1) (σ:=σ) (K:=K) (k0:=k0)
-    simp [Exp.subst, Exp.rename, ih0, ih1]
-  | .case_ f0 f1 f2 =>
+  | .throw f0 =>
     have ih0 := Exp.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
-    have ih1 := Exp.weaken_subst_comm (t:=f1) (σ:=σ) (K:=K,x) (k0:=k0)
-    have ih2 := Exp.weaken_subst_comm (t:=f2) (σ:=σ) (K:=K,x) (k0:=k0)
     simp [Exp.subst, Exp.rename, ih0]
-    exact ⟨ih1, ih2⟩
-  | .perform f0 f1 =>
-    have ih0 := Eff.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
-    have ih1 := Exp.weaken_subst_comm (t:=f1) (σ:=σ) (K:=K) (k0:=k0)
-    simp [Exp.subst, Exp.rename, ih0, ih1]
-  | .handle f0 f1 =>
+  | .trycatch f0 f1 =>
     have ih0 := Exp.weaken_subst_comm (t:=f0) (σ:=σ) (K:=K) (k0:=k0)
     have ih1 := Exp.weaken_subst_comm (t:=f1) (σ:=σ) (K:=K,x) (k0:=k0)
     simp [Exp.subst, Exp.rename, ih0]
@@ -341,7 +309,6 @@ theorem Eff.subst_comp {t : Eff s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :
   induction t generalizing s2 s3 with
   | evar => simp [Eff.subst, Subst.comp]
   | pure => rfl
-  | io => rfl
   | exn => rfl
   | union _ _ ih0 ih1 =>
     simp_all [Eff.subst]
@@ -358,11 +325,7 @@ theorem Ty.subst_comp {t : Ty s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :
     simp_all [Ty.subst, Subst.comp_lift]
   | prod _ _ ih0 ih1 =>
     simp_all [Ty.subst]
-  | sum _ _ ih0 ih1 =>
-    simp_all [Ty.subst]
   | unit => rfl
-  | handler _ _ _ _ ih0 ih1 =>
-    simp_all [Ty.subst, Eff.subst_comp]
 
 theorem Exp.subst_comp {t : Exp s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :
   (t.subst σ1).subst σ2 = t.subst (σ1.comp σ2) := by
@@ -386,15 +349,9 @@ theorem Exp.subst_comp {t : Exp s1} {σ1 : Subst s1 s2} {σ2 : Subst s2 s3} :
     simp_all [Exp.subst]
   | snd _ ih0 =>
     simp_all [Exp.subst]
-  | inl _ _ ih0 =>
-    simp_all [Exp.subst, Ty.subst_comp]
-  | inr _ _ ih0 =>
-    simp_all [Exp.subst, Ty.subst_comp]
-  | case_ _ _ _ ih0 ih1 ih2 =>
-    simp_all [Exp.subst, Subst.comp_lift]
-  | perform _ _ ih0 =>
-    simp_all [Exp.subst, Eff.subst_comp]
-  | handle _ _ ih0 ih1 =>
+  | throw _ ih0 =>
+    simp_all [Exp.subst]
+  | trycatch _ _ ih0 ih1 =>
     simp_all [Exp.subst, Subst.comp_lift]
   | letin _ _ ih0 ih1 =>
     simp_all [Exp.subst, Subst.comp_lift]
@@ -415,7 +372,6 @@ theorem Eff.subst_id {t : Eff s} :
   induction t with
   | evar => simp [Eff.subst, Subst.id]
   | pure => rfl
-  | io => rfl
   | exn => rfl
   | union _ _ ih0 ih1 =>
     simp_all [Eff.subst]
@@ -432,11 +388,7 @@ theorem Ty.subst_id {t : Ty s} :
     simp_all [Ty.subst, Subst.lift_id]
   | prod _ _ ih0 ih1 =>
     simp_all [Ty.subst]
-  | sum _ _ ih0 ih1 =>
-    simp_all [Ty.subst]
   | unit => rfl
-  | handler _ _ _ _ ih0 ih1 =>
-    simp_all [Ty.subst, Eff.subst_id]
 
 theorem Exp.subst_id {t : Exp s} :
   t.subst Subst.id = t := by
@@ -460,15 +412,9 @@ theorem Exp.subst_id {t : Exp s} :
     simp_all [Exp.subst]
   | snd _ ih0 =>
     simp_all [Exp.subst]
-  | inl _ _ ih0 =>
-    simp_all [Exp.subst, Ty.subst_id]
-  | inr _ _ ih0 =>
-    simp_all [Exp.subst, Ty.subst_id]
-  | case_ _ _ _ ih0 ih1 ih2 =>
-    simp_all [Exp.subst, Subst.lift_id]
-  | perform _ _ ih0 =>
-    simp_all [Exp.subst, Eff.subst_id]
-  | handle _ _ ih0 ih1 =>
+  | throw _ ih0 =>
+    simp_all [Exp.subst]
+  | trycatch _ _ ih0 ih1 =>
     simp_all [Exp.subst, Subst.lift_id]
   | letin _ _ ih0 ih1 =>
     simp_all [Exp.subst, Subst.lift_id]

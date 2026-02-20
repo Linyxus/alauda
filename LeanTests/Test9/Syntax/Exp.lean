@@ -15,11 +15,8 @@ inductive Exp : Sig -> Type where
 | pair : Exp s -> Exp s -> Exp s
 | fst : Exp s -> Exp s
 | snd : Exp s -> Exp s
-| inl : Ty s -> Exp s -> Exp s
-| inr : Ty s -> Exp s -> Exp s
-| case_ : Exp s -> Exp (s,x) -> Exp (s,x) -> Exp s
-| perform : Eff s -> Exp s -> Exp s
-| handle : Exp s -> Exp (s,x) -> Exp s
+| throw : Exp s -> Exp s
+| trycatch : Exp s -> Exp (s,x) -> Exp s
 | letin : Exp s -> Exp (s,x) -> Exp s
 | unit : Exp s
 
@@ -34,11 +31,8 @@ def Exp.rename : Exp s1 -> Rename s1 s2 -> Exp s2
 | .pair a0 a1, f => .pair (a0.rename f) (a1.rename f)
 | .fst a0, f => .fst (a0.rename f)
 | .snd a0, f => .snd (a0.rename f)
-| .inl a0 a1, f => .inl (a0.rename f) (a1.rename f)
-| .inr a0 a1, f => .inr (a0.rename f) (a1.rename f)
-| .case_ a0 a1 a2, f => .case_ (a0.rename f) (a1.rename f.lift) (a2.rename f.lift)
-| .perform a0 a1, f => .perform (a0.rename f) (a1.rename f)
-| .handle a0 a1, f => .handle (a0.rename f) (a1.rename f.lift)
+| .throw a0, f => .throw (a0.rename f)
+| .trycatch a0 a1, f => .trycatch (a0.rename f) (a1.rename f.lift)
 | .letin a0 a1, f => .letin (a0.rename f) (a1.rename f.lift)
 | .unit, _ => .unit
 
@@ -64,15 +58,9 @@ theorem Exp.rename_id {t : Exp s} :
     simp_all [Exp.rename]
   case snd =>
     simp_all [Exp.rename]
-  case inl =>
-    simp_all [Exp.rename, Ty.rename_id]
-  case inr =>
-    simp_all [Exp.rename, Ty.rename_id]
-  case case_ =>
-    simp_all [Exp.rename, Rename.lift_id]
-  case perform =>
-    simp_all [Exp.rename, Eff.rename_id]
-  case handle =>
+  case throw =>
+    simp_all [Exp.rename]
+  case trycatch =>
     simp_all [Exp.rename, Rename.lift_id]
   case letin =>
     simp_all [Exp.rename, Rename.lift_id]
@@ -100,15 +88,9 @@ theorem Exp.rename_comp {t : Exp s1} {f : Rename s1 s2} {g : Rename s2 s3} :
     simp_all [Exp.rename]
   case snd =>
     simp_all [Exp.rename]
-  case inl =>
-    simp_all [Exp.rename, Ty.rename_comp]
-  case inr =>
-    simp_all [Exp.rename, Ty.rename_comp]
-  case case_ =>
-    simp_all [Exp.rename, Rename.lift_comp]
-  case perform =>
-    simp_all [Exp.rename, Eff.rename_comp]
-  case handle =>
+  case throw =>
+    simp_all [Exp.rename]
+  case trycatch =>
     simp_all [Exp.rename, Rename.lift_comp]
   case letin =>
     simp_all [Exp.rename, Rename.lift_comp]

@@ -8,7 +8,6 @@ kinds:
 inductive Eff : Sig -> Type
   | evar : BVar s .evar -> Eff s
   | pure : Eff s
-  | io : Eff s
   | exn : Eff s
   | union : Eff s -> Eff s -> Eff s
 
@@ -18,9 +17,7 @@ inductive Ty : Sig -> Type
   | forall_ : Ty (s,X) -> Ty s
   | eforall : Ty (s,e) -> Ty s
   | prod : Ty s -> Ty s -> Ty s
-  | sum : Ty s -> Ty s -> Ty s
   | unit : Ty s
-  | handler : Eff s -> Eff s -> Ty s -> Ty s -> Ty s
 
 inductive Exp : Sig -> Type
   | var : BVar s .var -> Exp s
@@ -33,10 +30,7 @@ inductive Exp : Sig -> Type
   | pair : Exp s -> Exp s -> Exp s
   | fst : Exp s -> Exp s
   | snd : Exp s -> Exp s
-  | inl : Ty s -> Exp s -> Exp s
-  | inr : Ty s -> Exp s -> Exp s
-  | case_ : Exp s -> Exp (s,x) -> Exp (s,x) -> Exp s
-  | perform : Eff s -> Exp s -> Exp s
-  | handle : Exp s -> Exp (s,x) -> Exp s
+  | throw : Exp s -> Exp s
+  | trycatch : Exp s -> Exp (s,x) -> Exp s
   | letin : Exp s -> Exp (s,x) -> Exp s
   | unit : Exp s

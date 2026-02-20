@@ -9,9 +9,7 @@ inductive Ty : Sig -> Type where
 | forall_ : Ty (s,X) -> Ty s
 | eforall : Ty (s,e) -> Ty s
 | prod : Ty s -> Ty s -> Ty s
-| sum : Ty s -> Ty s -> Ty s
 | unit : Ty s
-| handler : Eff s -> Eff s -> Ty s -> Ty s -> Ty s
 
 def Ty.rename : Ty s1 -> Rename s1 s2 -> Ty s2
 | .tvar x0, f => .tvar (f.var x0)
@@ -19,9 +17,7 @@ def Ty.rename : Ty s1 -> Rename s1 s2 -> Ty s2
 | .forall_ a0, f => .forall_ (a0.rename f.lift)
 | .eforall a0, f => .eforall (a0.rename f.lift)
 | .prod a0 a1, f => .prod (a0.rename f) (a1.rename f)
-| .sum a0 a1, f => .sum (a0.rename f) (a1.rename f)
 | .unit, _ => .unit
-| .handler a0 a1 a2 a3, f => .handler (a0.rename f) (a1.rename f) (a2.rename f) (a3.rename f)
 
 theorem Ty.rename_id {t : Ty s} :
     t.rename (Rename.id) = t := by
@@ -35,11 +31,7 @@ theorem Ty.rename_id {t : Ty s} :
     simp_all [Ty.rename, Rename.lift_id]
   case prod =>
     simp_all [Ty.rename]
-  case sum =>
-    simp_all [Ty.rename]
   case unit => rfl
-  case handler =>
-    simp_all [Ty.rename, Eff.rename_id]
 
 theorem Ty.rename_comp {t : Ty s1} {f : Rename s1 s2} {g : Rename s2 s3} :
     (t.rename f).rename g = t.rename (f.comp g) := by
@@ -53,10 +45,6 @@ theorem Ty.rename_comp {t : Ty s1} {f : Rename s1 s2} {g : Rename s2 s3} :
     simp_all [Ty.rename, Rename.lift_comp]
   case prod =>
     simp_all [Ty.rename]
-  case sum =>
-    simp_all [Ty.rename]
   case unit => rfl
-  case handler =>
-    simp_all [Ty.rename, Eff.rename_comp]
 
 end Effect
